@@ -228,3 +228,20 @@ def test_full_sana_default_is_cross_attention_and_invalid_methods_do_not_freeze(
     assert {id(parameter) for parameter in selected} == {
         id(parameter) for parameter in backend.transformer["attn2"].parameters()}
     assert not any(parameter.requires_grad for parameter in backend.transformer["attn1"].parameters())
+
+
+def test_peft_configuration_identity_is_weights_only_checkpoint_safe():
+    import io
+    import torch
+    from peft import LoraConfig
+
+    backend, _ = _state_fixture()
+    backend.transformer.peft_config = {
+        "default": LoraConfig(r=2, lora_alpha=4, target_modules=["linear"])}
+    identity = backend.training_identity()
+    serialized = io.BytesIO()
+    torch.save(identity, serialized)
+    serialized.seek(0)
+    restored = torch.load(serialized, weights_only=True)
+    assert restored == identity
+    assert type(restored["metadata"]["runtime"]["adapter_configs"]["transformer"]["default"]["peft_type"]) is str
