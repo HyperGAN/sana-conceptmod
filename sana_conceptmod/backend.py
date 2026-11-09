@@ -197,7 +197,14 @@ class SanaBackend(Backend):
 
     # ---------------- training ----------------
 
-    def trainable_parameters(self, train_method: str):
+    def trainable_parameters(self, train_method: str | None):
+        if self.lora_rank is not None:
+            if train_method not in (None, "lora"):
+                raise ValueError(f"SANA LoRA requires train_method=None or 'lora', got {train_method!r}")
+        else:
+            train_method = "xattn" if train_method is None else train_method
+            if train_method not in ("xattn", "selfattn", "attn", "full", "noxattn"):
+                raise ValueError(f"unknown SANA train_method {train_method!r}")
         model = self.transformer
         model.train()
         if self.lora_rank is not None:
@@ -232,3 +239,15 @@ class SanaBackend(Backend):
         if self.encoder_lora:
             components["text_encoder"] = self.pipe.text_encoder
         return components
+
+    def training_modules(self):
+        from sana_conceptmod.state import declared_modules
+
+        return declared_modules(self, super().training_modules())
+
+    def artifact_metadata(self):
+        from sana_conceptmod.state import runtime_metadata
+
+        metadata = super().artifact_metadata()
+        metadata["runtime"] = runtime_metadata(self)
+        return metadata
